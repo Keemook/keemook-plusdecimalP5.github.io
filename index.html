@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>เกมบวกลบทศนิยม ป.5 พร้อมเสียง</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #1a202c;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            touch-action: none; /* ป้องกันการเลื่อนจอในมือถือ */
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            height: 100dvh;
+            max-height: 900px;
+            background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); /* ท้องฟ้าพาสเทล */
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* เมฆลอย (Clouds Animation) */
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+            opacity: 0.8;
+            animation: floatCloud linear infinite;
+        }
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+        }
+        @keyframes floatCloud {
+            from { transform: translateX(110%); }
+            to { transform: translateX(-150%); }
+        }
+
+        /* ถนน (Track 3D Illusion) */
+        #track-container {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 60%;
+            perspective: 600px;
+            perspective-origin: 50% 0%;
+            z-index: 1;
+        }
+        .track {
+            position: absolute;
+            bottom: -20%;
+            width: 140%;
+            left: -20%;
+            height: 150%;
+            background: linear-gradient(180deg, #9de0ad 0%, #45b649 100%); /* พื้นหญ้าสว่าง */
+            transform: rotateX(75deg);
+            display: flex;
+            border-left: 8px solid #fff;
+            border-right: 8px solid #fff;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.1);
+        }
+        .lane {
+            flex: 1;
+            border-right: 4px dashed rgba(255, 255, 255, 0.7);
+            position: relative;
+        }
+        .lane:last-child { border-right: none; }
+        
+        /* วิ่งถนน (Moving lines) */
+        @keyframes moveRoad {
+            from { background-position: 0 0; }
+            to { background-position: 0 150px; }
+        }
+        .lane-lines {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: linear-gradient(to bottom, transparent 50%, rgba(255,255,255,0.4) 50%);
+            background-size: 100% 100px;
+            animation: moveRoad 1.5s linear infinite;
+        }
+
+        /* ตัวละคร (Character) */
+        #player {
+            position: absolute;
+            bottom: 8%; /* ปรับให้เกาะพื้นมากขึ้น */
+            width: 120px; 
+            height: 120px;
+            margin-left: -60px; /* Center origin ปรับตามความกว้างใหม่ */
+            text-align: center;
+            font-size: 6.5rem; /* เพิ่มขนาดตัวอีโมจิ */
+            line-height: 120px;
+            z-index: 10;
+            transition: left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy movement ให้เร็วขึ้นเล็กน้อย */
+            filter: drop-shadow(0px 15px 5px rgba(0,0,0,0.4));
+        }
+
+        @keyframes wiggle {
+            0% { transform: rotate(-5deg) translateY(0); }
+            50% { transform: rotate(5deg) translateY(-15px) scale(1.05); }
+            100% { transform: rotate(-5deg) translateY(0); }
+        }
+        .wiggling {
+            animation: wiggle 0.6s ease-in-out infinite;
+        }
+
+        /* กำแพงคำตอบ (Answers) */
+        #walls-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5;
+            pointer-events: none; /* ให้กดทะลุได้ */
+        }
+        .wall {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%);
+            border: 6px solid #fff;
+            border-radius: 20px;
+            padding: 10px 25px; /* พื้นที่รอบตัวอักษร */
+            font-size: 3.5rem; /* ตัวอักษรใหญ่ */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #d81b60;
+            font-weight: 800;
+            box-shadow: 0 10px 0 #d81b60, 0 15px 20px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+
+        /* UI Overlays */
+        #top-ui {
+            position: absolute;
+            top: 0; width: 100%;
+            padding: 20px 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .question-box {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 30px;
+            border-radius: 40px;
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #2b6cb0;
+            box-shadow: 0 6px 0 #bee3f8, 0 10px 20px rgba(0,0,0,0.2);
+            border: 4px solid #63b3ed;
+            margin-top: 15px;
+            text-align: center;
+        }
+        .score-box {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: white;
+            background: #f6ad55;
+            padding: 5px 25px;
+            border-radius: 25px;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 0 #dd6b20;
+        }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 15;
+        }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.8);
+            border: 4px solid #4299e1;
+            color: #2b6cb0;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            font-size: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 6px 0 #3182ce;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .control-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 #3182ce;
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 50; padding: 20px; text-align: center;
+        }
+        .hidden { display: none !important; }
+
+        /* Effects */
+        .flash-green { animation: flashG 0.5s ease; }
+        @keyframes flashG { 0%,100%{background:transparent;} 50%{background:rgba(72,187,120,0.4);} }
+        
+        .floating-text {
+            position: absolute;
+            color: #ffde59;
+            font-weight: 900;
+            font-size: 3.5rem;
+            -webkit-text-stroke: 2px #d81b60;
+            pointer-events: none;
+            z-index: 30;
+            animation: floatUp 1s forwards cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(0.5) translate(-50%, -50%); }
+            100% { opacity: 0; transform: translateY(-100px) scale(1.5) translate(-50%, -50%); }
+        }
+
+        /* Mute Button */
+        #mute-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 40;
+            background: white;
+            border: 3px solid #63b3ed;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 0 #3182ce;
+            cursor: pointer;
+            user-select: none;
+        }
+        #mute-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #3182ce;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    
+    <!-- Audio Mute Button -->
+    <div id="mute-btn" onclick="toggleMute()">🔊</div>
+
+    <!-- Clouds Background -->
+    <div class="cloud" style="top: 10%; left: 100%; width: 80px; height: 25px; animation-duration: 25s;"></div>
+    <div class="cloud" style="top: 25%; left: 100%; width: 120px; height: 35px; animation-duration: 35s; animation-delay: -10s;"></div>
+    <div class="cloud" style="top: 5%; left: 100%; width: 60px; height: 20px; animation-duration: 20s; animation-delay: -5s;"></div>
+
+    <!-- 3D Track -->
+    <div id="track-container">
+        <div class="track">
+            <div class="lane"><div class="lane-lines" id="line-0"></div></div>
+            <div class="lane"><div class="lane-lines" id="line-1"></div></div>
+            <div class="lane"><div class="lane-lines" id="line-2"></div></div>
+        </div>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="top-ui">
+        <div id="score-display" class="score-box">คะแนน: 0</div>
+        <div id="question-display" class="question-box">0.0 + 0.0</div>
+    </div>
+
+    <!-- Answers / Walls -->
+    <div id="walls-container">
+        <div class="wall" id="wall-0">0.0</div>
+        <div class="wall" id="wall-1">0.0</div>
+        <div class="wall" id="wall-2">0.0</div>
+    </div>
+
+    <!-- Player -->
+    <div id="player" class="wiggling" style="left: 50%;">🐱</div>
+
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <div class="control-btn" onpointerdown="movePlayer(-1)">◀️</div>
+        <div class="control-btn" onpointerdown="movePlayer(1)">▶️</div>
+    </div>
+
+    <!-- Screen Flash Effect -->
+    <div id="flash-effect" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index: 25; pointer-events: none;"></div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="screen">
+        <div class="bg-white rounded-3xl p-8 mb-6 w-full max-w-sm text-gray-800 shadow-2xl border-4 border-pink-400 relative">
+            <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 text-7xl">🐱</div>
+            <h1 class="text-3xl font-extrabold text-blue-600 mb-4 mt-6">วิ่งๆ คิดๆ<br>บวกลบทศนิยม</h1>
+            <ul class="text-left space-y-3 font-semibold text-gray-600 bg-blue-50 p-4 rounded-xl">
+                <li>☁️ ดูโจทย์ด้านบน</li>
+                <li>☁️ เลือกคำตอบที่ลอยมา</li>
+                <li>☁️ กด ◀️ ▶️ เพื่อเปลี่ยนเลน</li>
+                <li class="text-pink-500">☁️ ยิ่งคะแนนเยอะ ยิ่งยากขึ้นนะ!</li>
+            </ul>
+        </div>
+        <button onclick="startGame()" class="bg-gradient-to-b from-pink-400 to-pink-600 text-white font-black py-4 px-12 rounded-full text-2xl border-b-6 border-pink-800 shadow-[0_10px_0_#9d174d] active:translate-y-2 active:shadow-[0_0px_0_#9d174d] transition-all">
+            เริ่มเล่นเลย!
+        </button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="screen hidden">
+        <h2 class="text-5xl font-extrabold text-red-500 mb-2 drop-shadow-md">ว้า! ผิดซะแล้ว</h2>
+        <div class="bg-white rounded-3xl p-6 mb-6 max-w-sm w-full text-gray-800 shadow-2xl border-4 border-red-300">
+            <p class="text-lg font-bold text-gray-500 mb-1">คะแนนที่ทำได้</p>
+            <p id="final-score" class="text-7xl font-black text-orange-500 mb-4 drop-shadow-sm">0</p>
+            
+            <div class="bg-red-50 rounded-xl p-4 border-2 border-red-200">
+                <p class="text-sm font-black text-red-600 mb-2">เฉลยข้อที่ผิด:</p>
+                <p id="mistake-question" class="text-2xl font-black text-blue-800 mb-2">1.2 + 0.5 = ?</p>
+                <p class="text-sm font-semibold text-gray-700" id="mistake-explanation">
+                    คำตอบคือ 1.7
+                </p>
+            </div>
+        </div>
+        <button onclick="resetGame()" class="bg-gradient-to-b from-green-400 to-green-600 text-white font-black py-4 px-10 rounded-full text-xl border-b-6 border-green-800 shadow-[0_10px_0_#166534] active:translate-y-2 active:shadow-[0_0px_0_#166534] transition-all">
+            เล่นอีกครั้ง 🔄
+        </button>
+    </div>
+
+</div>
+
+<script>
+    // Game State
+    let gameState = 'start'; 
+    let score = 0;
+    let playerLane = 1; // 0=ซ้าย, 1=กลาง, 2=ขวา
+    let currentProblem = null;
+    let animationId;
+    
+    // Animation/Movement variables
+    let wallProgress = 0; // 0 = ไกลมาก (horizon), 1 = ถึงตัวผู้เล่น
+    let lastTime = 0;
+    let durationMs = 6000; // ความเร็วเริ่มต้น (มิลลิวินาที) ให้ช้าๆ เด็กจะได้คิดทัน
+    const MIN_DURATION = 3500; // เร็วสุด
+    
+    // Audio Engine variables
+    let audioCtx = null;
+    let masterGain = null;
+    let isMuted = false;
+    let bgmTimer = null;
+    let nextNoteTime = 0;
+    let bgmNoteIdx = 0;
+    
+    // Happy Arpeggio BGM Sequence [frequency, duration in seconds]
+    const bgmSequence = [
+        [261.63, 0.25], // C4
+        [329.63, 0.25], // E4
+        [392.00, 0.25], // G4
+        [523.25, 0.50], // C5
+        [392.00, 0.25], // G4
+        [329.63, 0.50]  // E4
+    ];
+
+    // DOM
+    const playerEl = document.getElementById('player');
+    const wallEls = [document.getElementById('wall-0'), document.getElementById('wall-1'), document.getElementById('wall-2')];
+    const scoreEl = document.getElementById('score-display');
+    const questionEl = document.getElementById('question-display');
+    const screens = {
+        start: document.getElementById('start-screen'),
+        gameover: document.getElementById('game-over-screen')
+    };
+    
+    // Lane Center X values (in %) for Player
+    const playerLaneX = [16.6, 50, 83.3]; 
+
+    // --- AUDIO SYSTEM ---
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain();
+            masterGain.connect(audioCtx.destination);
+            masterGain.gain.value = isMuted ? 0 : 0.5; // Default volume 50%
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        document.getElementById('mute-btn').innerText = isMuted ? '🔇' : '🔊';
+        if (masterGain) {
+            masterGain.gain.value = isMuted ? 0 : 0.5;
+        }
+    }
+
+    function playTone(freq, type, duration, vol, slideFreq = null) {
+        if (!audioCtx || isMuted) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (slideFreq) {
+            osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+        }
+
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function playMoveSFX() {
+        // Quick short pop sound
+        playTone(350, 'sine', 0.1, 0.4);
+    }
+
+    function playCorrectSFX() {
+        // Happy upward chime
+        playTone(523.25, 'triangle', 0.15, 0.6, 1046.50); // C5 slide to C6
+        setTimeout(() => playTone(1046.50, 'sine', 0.3, 0.6), 150);
+    }
+
+    function playWrongSFX() {
+        // Low buzzer sliding down
+        playTone(150, 'sawtooth', 0.6, 0.7, 50);
+    }
+
+    function scheduleBGM() {
+        if (!audioCtx || gameState !== 'playing') return;
+        
+        // Schedule notes a little bit ahead to ensure smooth playback
+        while (nextNoteTime < audioCtx.currentTime + 0.1) {
+            const note = bgmSequence[bgmNoteIdx];
+            // Play quiet background note
+            playTone(note[0], 'sine', note[1] * 0.8, 0.15); 
+            nextNoteTime += note[1];
+            bgmNoteIdx = (bgmNoteIdx + 1) % bgmSequence.length;
+        }
+        
+        bgmTimer = setTimeout(scheduleBGM, 50); // check again in 50ms
+    }
+
+    function startBGM() {
+        if (bgmTimer) clearTimeout(bgmTimer);
+        if (!audioCtx) return;
+        nextNoteTime = audioCtx.currentTime + 0.1;
+        scheduleBGM();
+    }
+
+    function stopBGM() {
+        if (bgmTimer) clearTimeout(bgmTimer);
+    }
+
+    // --- GAME LOGIC ---
+    function generateProblem() {
+        // เลือกระดับความยากตามคะแนน
+        let decimals = 1;
+        if (score >= 50 && score < 100) decimals = 2;
+        else if (score >= 100) decimals = 3;
+
+        let multiplier = Math.pow(10, decimals);
+        let isAdd = Math.random() > 0.5;
+
+        // สุ่มตัวเลขแบบ Integer เพื่อป้องกันปัญหาทศนิยมเพี้ยนของ JS
+        let maxVal = decimals === 1 ? 50 : (decimals === 2 ? 300 : 1000);
+        let minVal = decimals === 1 ? 5 : (decimals === 2 ? 20 : 100);
+
+        let num1Int = Math.floor(Math.random() * maxVal) + minVal;
+        let num2Int = Math.floor(Math.random() * maxVal) + minVal;
+
+        // ถ้าลบ ให้ตัวแรกมากกว่าตัวหลังเสมอ (เด็ก ป.5)
+        if (!isAdd && num1Int < num2Int) {
+            let temp = num1Int; num1Int = num2Int; num2Int = temp;
+        }
+
+        let correctInt = isAdd ? num1Int + num2Int : num1Int - num2Int;
+        
+        // แปลงกลับเป็นทศนิยม
+        let n1 = num1Int / multiplier;
+        let n2 = num2Int / multiplier;
+        let correct = correctInt / multiplier;
+
+        // สร้างตัวหลอก (Distractors)
+        // หลอก 1: ผิดที่ทศนิยมตำแหน่งสุดท้าย
+        let w1Int = correctInt + (Math.floor(Math.random() * 4) + 1); 
+        // หลอก 2: ผิดที่หลักหน่วย หรือลืมทด
+        let w2Int = correctInt + (Math.floor(Math.random() * 3) + 1) * 10; 
+        if (Math.random() > 0.5) w2Int = correctInt - (Math.floor(Math.random() * 3) + 1) * 10;
+
+        if (w2Int <= 0) w2Int = correctInt + 20; // ป้องกันติดลบ
+        if (w1Int === correctInt) w1Int += 2;
+        if (w2Int === correctInt || w2Int === w1Int) w2Int += 5;
+
+        let w1 = w1Int / multiplier;
+        let w2 = w2Int / multiplier;
+
+        let qStr = `${n1.toFixed(decimals)} ${isAdd ? '+' : '-'} ${n2.toFixed(decimals)}`;
+
+        let answers = [
+            { val: correct.toFixed(decimals), isCorrect: true },
+            { val: w1.toFixed(decimals), isCorrect: false },
+            { val: w2.toFixed(decimals), isCorrect: false }
+        ];
+
+        // สลับที่คำตอบ (Shuffle)
+        answers.sort(() => Math.random() - 0.5);
+        let correctLaneIdx = answers.findIndex(a => a.isCorrect);
+        
+        let explanation = `คำตอบที่ถูกคือ ${correct.toFixed(decimals)} ครับ\n( ${qStr} = ${correct.toFixed(decimals)} )`;
+
+        return { question: qStr, answers: answers, correctLane: correctLaneIdx, explanation: explanation };
+    }
+
+    function setPlayerLane(laneIndex) {
+        if (gameState !== 'playing') return;
+        let targetLane = Math.max(0, Math.min(2, laneIndex));
+        if (targetLane !== playerLane) {
+            playerLane = targetLane;
+            playerEl.style.left = `${playerLaneX[playerLane]}%`;
+            playMoveSFX(); // เล่นเสียงขยับ
+        }
+    }
+
+    function movePlayer(direction) {
+        setPlayerLane(playerLane + direction);
+    }
+
+    // Keyboard bindings
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') movePlayer(-1);
+        else if (e.key === 'ArrowRight') movePlayer(1);
+    });
+
+    function renderWalls(progress) {
+        // คำนวณ Pseudo-3D
+        // Progress 0 = ไกลมาก (Top 35%), Progress 1 = ถึงตัว (Top 85%)
+        const yStart = 35; 
+        const yEnd = 85; 
+        const currentY = yStart + (yEnd - yStart) * progress;
+
+        // ขนาดจากเล็กไปใหญ่
+        const scaleStart = 0.15;
+        const scaleEnd = 1.35; // ปรับให้เมื่อมาถึงตัวผู้เล่นกำแพงจะดูใหญ่ขึ้นอีก
+        const currentScale = scaleStart + (scaleEnd - scaleStart) * Math.pow(progress, 2); // ยกกำลัง 2 ให้ดูพุ่งเข้ามาเร็วขึ้นตอนใกล้
+
+        // ตำแหน่ง X ของแต่ละเลน (เมื่อไกล เลนจะลู่เข้าหากัน)
+        // ศูนย์กลางจอคือ 50%
+        const xOffsets = [-33.3, 0, 33.3]; // offset ของเลนที่จุดล่างสุด
+        
+        wallEls.forEach((wall, idx) => {
+            // คำนวณ X ให้บานออกตาม progress
+            const currentXOffset = xOffsets[idx] * progress;
+            const currentX = 50 + currentXOffset;
+
+            // Apply style
+            wall.style.top = `${currentY}%`;
+            wall.style.left = `${currentX}%`;
+            
+            // ขนาดฟอนต์และกล่อง
+            wall.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
+            wall.style.opacity = progress < 0.05 ? 0 : 1; // เฟดเข้าตอนเริ่ม
+        });
+    }
+
+    function prepareNextWave() {
+        currentProblem = generateProblem();
+        questionEl.textContent = currentProblem.question;
+        
+        wallEls.forEach((el, index) => {
+            el.textContent = currentProblem.answers[index].val;
+            // รีเซ็ตสี
+            el.style.background = 'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%)';
+        });
+
+        wallProgress = 0; // เด้งกลับไปที่ขอบฟ้า
+        
+        // ปรับความเร็วให้เร็วขึ้นนิดหน่อยเมื่อคะแนนเยอะ
+        durationMs = Math.max(MIN_DURATION, 6000 - (score * 20));
+    }
+
+    function createScoreFloat() {
+        const el = document.createElement('div');
+        el.textContent = '+10';
+        el.className = 'floating-text';
+        el.style.left = `${playerLaneX[playerLane]}%`;
+        el.style.top = `75%`;
+        document.getElementById('game-container').appendChild(el);
+        setTimeout(() => el.remove(), 1000);
+        
+        // กระพริบหน้าจอ
+        const flash = document.getElementById('flash-effect');
+        flash.classList.remove('flash-green');
+        void flash.offsetWidth;
+        flash.classList.add('flash-green');
+    }
+
+    function gameLoop(timestamp) {
+        if (gameState !== 'playing') return;
+        
+        if (!lastTime) lastTime = timestamp;
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
+
+        // Update progress
+        wallProgress += deltaTime / durationMs;
+
+        // Check Collision
+        if (wallProgress >= 1.0) {
+            if (playerLane === currentProblem.correctLane) {
+                // ตอบถูก!
+                playCorrectSFX();
+                score += 10;
+                scoreEl.textContent = `คะแนน: ${score}`;
+                createScoreFloat();
+                prepareNextWave();
+            } else {
+                // ตอบผิด
+                playWrongSFX();
+                gameOver();
+                return;
+            }
+        } else {
+            // วาดกำแพง
+            renderWalls(wallProgress);
+        }
+
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+        // Init Audio Context on first user interaction to bypass browser restrictions
+        initAudio();
+        
+        gameState = 'playing';
+        score = 0;
+        wallProgress = 0;
+        lastTime = 0;
+        durationMs = 6000;
+        scoreEl.textContent = `คะแนน: 0`;
+        
+        screens.start.classList.add('hidden');
+        screens.gameover.classList.add('hidden');
+        
+        // รีเซ็ตเลนแบบเงียบๆ ไม่ต้องเล่นเสียงสไลด์ตอนเริ่มเกม
+        playerLane = 1;
+        playerEl.style.left = `${playerLaneX[playerLane]}%`;
+
+        prepareNextWave();
+        
+        // เริ่มเพลงพื้นหลัง
+        startBGM();
+
+        // เปิดอนิเมชั่นถนน
+        document.querySelectorAll('.lane-lines').forEach(el => el.style.animationPlayState = 'running');
+        
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function gameOver() {
+        gameState = 'gameover';
+        cancelAnimationFrame(animationId);
+        stopBGM(); // หยุดเพลงพื้นหลัง
+        
+        // หยุดอนิเมชั่นถนน
+        document.querySelectorAll('.lane-lines').forEach(el => el.style.animationPlayState = 'paused');
+
+        // แสดงหน้าจอจบ
+        document.getElementById('final-score').textContent = score;
+        document.getElementById('mistake-question').textContent = `${currentProblem.question} = ?`;
+        document.getElementById('mistake-explanation').innerText = currentProblem.explanation;
+        
+        screens.gameover.classList.remove('hidden');
+    }
+
+    function resetGame() {
+        startGame();
+    }
+
+    // ซ่อนกำแพงตอนหน้าโหลดครั้งแรก
+    renderWalls(0);
+</script>
+</body>
+</html>
