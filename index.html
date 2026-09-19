@@ -236,11 +236,10 @@
             100% { opacity: 0; transform: translateY(-100px) scale(1.5) translate(-50%, -50%); }
         }
 
-        /* Mute Button */
-        #mute-btn {
+        /* Top Buttons (Mute & Pause) */
+        .top-btn {
             position: absolute;
             top: 20px;
-            right: 20px;
             z-index: 40;
             background: white;
             border: 3px solid #63b3ed;
@@ -255,10 +254,12 @@
             cursor: pointer;
             user-select: none;
         }
-        #mute-btn:active {
+        .top-btn:active {
             transform: translateY(4px);
             box-shadow: 0 0 0 #3182ce;
         }
+        #mute-btn { right: 20px; }
+        #pause-btn { left: 20px; }
     </style>
 </head>
 <body>
@@ -266,7 +267,10 @@
 <div id="game-container">
     
     <!-- Audio Mute Button -->
-    <div id="mute-btn" onclick="toggleMute()">🔊</div>
+    <div id="mute-btn" class="top-btn" onclick="toggleMute()">🔊</div>
+    
+    <!-- Pause Button -->
+    <div id="pause-btn" class="top-btn hidden" onclick="togglePause()">⏸️</div>
 
     <!-- Clouds Background -->
     <div class="cloud" style="top: 10%; left: 100%; width: 80px; height: 25px; animation-duration: 25s;"></div>
@@ -331,6 +335,16 @@
             <p class="text-lg font-bold text-gray-500 mb-1">คะแนนที่ทำได้</p>
             <p id="final-score" class="text-7xl font-black text-orange-500 mb-4 drop-shadow-sm">0</p>
             
+            <div class="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-300 mb-4 text-left shadow-inner">
+                <h3 class="text-lg font-extrabold text-yellow-600 mb-2 border-b-2 border-yellow-200 pb-1">🏆 กระดานสถิติ</h3>
+                <div class="flex justify-between font-bold text-gray-700 text-base mb-1">
+                    <span>✅ ตอบถูก:</span> <span id="stats-correct" class="text-green-600">0 ข้อ</span>
+                </div>
+                <div class="flex justify-between font-bold text-gray-700 text-base">
+                    <span>👑 คะแนนสูงสุด:</span> <span id="stats-highscore" class="text-orange-600">0</span>
+                </div>
+            </div>
+
             <div class="bg-red-50 rounded-xl p-4 border-2 border-red-200">
                 <p class="text-sm font-black text-red-600 mb-2">เฉลยข้อที่ผิด:</p>
                 <p id="mistake-question" class="text-2xl font-black text-blue-800 mb-2">1.2 + 0.5 = ?</p>
@@ -344,12 +358,28 @@
         </button>
     </div>
 
+    <!-- Pause Screen -->
+    <div id="pause-screen" class="screen hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center border-4 border-blue-400 shadow-2xl relative">
+            <h2 class="text-4xl font-extrabold text-blue-500 mb-8">หยุดพักแป๊บ ⏸️</h2>
+            <div class="space-y-4">
+                <button onclick="togglePause()" class="w-full bg-gradient-to-b from-blue-400 to-blue-600 text-white font-black py-4 px-6 rounded-full text-2xl border-b-6 border-blue-800 shadow-[0_8px_0_#1e40af] active:translate-y-2 active:shadow-[0_0px_0_#1e40af] transition-all">
+                    ▶️ เล่นต่อ
+                </button>
+                <button onclick="resetFromPause()" class="w-full bg-gradient-to-b from-orange-400 to-orange-600 text-white font-black py-4 px-6 rounded-full text-xl border-b-6 border-orange-800 shadow-[0_8px_0_#9a3412] active:translate-y-2 active:shadow-[0_0px_0_#9a3412] transition-all">
+                    🔄 เริ่มเล่นใหม่
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
     // Game State
     let gameState = 'start'; 
     let score = 0;
+    let highScore = localStorage.getItem('decimalRunnerHighScore') || 0; // Load High Score
     let playerLane = 1; // 0=ซ้าย, 1=กลาง, 2=ขวา
     let currentProblem = null;
     let animationId;
@@ -383,9 +413,11 @@
     const wallEls = [document.getElementById('wall-0'), document.getElementById('wall-1'), document.getElementById('wall-2')];
     const scoreEl = document.getElementById('score-display');
     const questionEl = document.getElementById('question-display');
+    const pauseBtn = document.getElementById('pause-btn');
     const screens = {
         start: document.getElementById('start-screen'),
-        gameover: document.getElementById('game-over-screen')
+        gameover: document.getElementById('game-over-screen'),
+        pause: document.getElementById('pause-screen')
     };
     
     // Lane Center X values (in %) for Player
@@ -476,6 +508,27 @@
     }
 
     // --- GAME LOGIC ---
+    function togglePause() {
+        if (gameState === 'playing') {
+            gameState = 'paused';
+            stopBGM(); // หยุดเพลง
+            document.querySelectorAll('.lane-lines').forEach(el => el.style.animationPlayState = 'paused'); // หยุดถนน
+            screens.pause.classList.remove('hidden');
+        } else if (gameState === 'paused') {
+            gameState = 'playing';
+            lastTime = 0; // รีเซ็ตเวลาเพื่อป้องกันกำแพงพุ่งวาป
+            startBGM(); // เล่นเพลงต่อ
+            document.querySelectorAll('.lane-lines').forEach(el => el.style.animationPlayState = 'running'); // ถนนวิ่งต่อ
+            screens.pause.classList.add('hidden');
+            animationId = requestAnimationFrame(gameLoop);
+        }
+    }
+
+    function resetFromPause() {
+        screens.pause.classList.add('hidden');
+        resetGame();
+    }
+
     function generateProblem() {
         // เลือกระดับความยากตามคะแนน
         let decimals = 1;
@@ -664,6 +717,7 @@
         
         screens.start.classList.add('hidden');
         screens.gameover.classList.add('hidden');
+        pauseBtn.classList.remove('hidden'); // แสดงปุ่มหยุดเมื่อเริ่มเล่น
         
         // รีเซ็ตเลนแบบเงียบๆ ไม่ต้องเล่นเสียงสไลด์ตอนเริ่มเกม
         playerLane = 1;
@@ -687,9 +741,20 @@
         
         // หยุดอนิเมชั่นถนน
         document.querySelectorAll('.lane-lines').forEach(el => el.style.animationPlayState = 'paused');
+        pauseBtn.classList.add('hidden'); // ซ่อนปุ่มหยุด
+
+        // คำนวณสถิติ
+        let correctCount = Math.floor(score / 10);
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('decimalRunnerHighScore', highScore); // บันทึกสถิติใหม่
+        }
 
         // แสดงหน้าจอจบ
         document.getElementById('final-score').textContent = score;
+        document.getElementById('stats-correct').textContent = `${correctCount} ข้อ`;
+        document.getElementById('stats-highscore').textContent = highScore;
+        
         document.getElementById('mistake-question').textContent = `${currentProblem.question} = ?`;
         document.getElementById('mistake-explanation').innerText = currentProblem.explanation;
         
